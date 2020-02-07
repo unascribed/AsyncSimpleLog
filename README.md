@@ -20,6 +20,18 @@ It has a very simple implementation with few bells and whistles, and is configur
 purely through code. It's up to you to expose these features through a config
 file, environment variables, etc.
 
+## What It Looks Like
+### Plain
+![](screenshot/plain.png)
+
+### ANSI
+![](screenshot/ansi.png)
+
+### ANSI + Powerline
+![](screenshot/powerline.png)
+
+(Not for everybody.)
+
 ## Installation
 AsyncSimpleLog is distributed on my personal Maven, repo.unascribed.com. Here's
 how you can use it in Gradle:
