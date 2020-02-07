@@ -1,0 +1,74 @@
+plugins {
+	id 'java-library'
+	id 'eclipse'
+	id 'net.minecrell.licenser' version '0.4.1'
+	id 'maven-publish'
+}
+
+group = 'com.unascribed'
+archivesBaseName = 'asyncsimplelog'
+version = '4.6.0'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.slf4j:slf4j-api:1.7.9'
+}
+
+license {
+	header = file('LICENSE')
+	include '**/*.java'
+}
+
+java {
+	withJavadocJar()
+	withSourcesJar()
+}
+
+publishing {
+	repositories {
+		maven {
+			// *shrug*
+			url = "file:///home/una/unascribed.com/_subdomains/repo"
+		}
+	}
+	publications {
+		mavenJava(MavenPublication) {
+			groupId = project.group
+			artifactId = 'asyncsimplelog'
+			version = project.version
+			
+			from components.java
+			
+			pom {
+				name = 'AsyncSimpleLog'
+				description = 'A fast, small, and useful logger implementation for SLF4j.'
+				url = 'https://github.com/unascribed/AsyncSimpleLog'
+				licenses {
+					license {
+						name = 'MIT License'
+						url = 'https://github.com/unascribed/AsyncSimpleLog/blob/trunk/LICENSE'
+					}
+				}
+				developers {
+					developer {
+						id = 'unascribed'
+						name = 'Una Thompson'
+						email = 'me@unascribed.com'
+					}
+				}
+				scm {
+					connection = 'scm:git:https://github.com/unascribed/AsyncSimpleLog.git'
+					developerConnection = 'scm:git:ssh://git@github.com:unascribed/AsyncSimpleLog.git'
+					url = 'https://github.com/unascribed/AsyncSimpleLog'
+				}
+			}
+		}
+	}
+}
+
+tasks.withType(GenerateModuleMetadata) {
+	enabled = false
+}
