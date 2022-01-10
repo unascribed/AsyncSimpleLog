@@ -7,7 +7,7 @@ plugins {
 
 group = 'com.unascribed'
 archivesBaseName = 'asyncsimplelog'
-version = '4.6.0'
+version = '4.6.1'
 
 repositories {
 	mavenCentral()
@@ -30,8 +30,11 @@ java {
 publishing {
 	repositories {
 		maven {
-			// *shrug*
-			url = "file:///home/una/unascribed.com/_subdomains/repo"
+			url "https://repo-api.sleeping.town/"
+			credentials {
+				username project.hasProperty("publish-username") ? project.getProperty("publish-username") : null
+				password project.hasProperty("publish-password") ? project.getProperty("publish-password") : null
+			}
 		}
 	}
 	publications {

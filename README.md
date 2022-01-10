@@ -48,7 +48,7 @@ And you can add AsyncSimpleLog as a dependency as such:
 
 ```gradle
 dependencies {
-	implementation "com.unascribed:asyncsimplelog:4.6.0"
+	implementation "com.unascribed:asyncsimplelog:4.6.1"
 }
 ```
 

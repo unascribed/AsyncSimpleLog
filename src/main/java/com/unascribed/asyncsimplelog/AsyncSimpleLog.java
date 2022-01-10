@@ -23,6 +23,7 @@
 
 package com.unascribed.asyncsimplelog;
 
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
@@ -86,7 +87,7 @@ public final class AsyncSimpleLog extends Thread {
 		/*package*/ final int bg;
 		/*package*/ final int fg;
 		/*package*/ final int levelInt;
-		private LogLevel(String str, int bg, int fg, int levelInt) {
+		LogLevel(String str, int bg, int fg, int levelInt) {
 			this.chr = str.charAt(0);
 			this.str = str;
 			this.bg = bg;
@@ -108,10 +109,12 @@ public final class AsyncSimpleLog extends Thread {
 	private static boolean ansi = false;
 	private static boolean powerline = false;
 	private static boolean collapseRepeats = false;
+	private static final List<PrintStream> forkSetup = Collections.synchronizedList(new ArrayList<>());
 
 	private final PrintStream out;
 	private final DateFormat df = new SimpleDateFormat("HH:mm:ss.SSS");
 	private final Map<String, Integer> hashes = new HashMap<>();
+	private final List<PrintStream> forks;
 	private String lastLine;
 	private String lastLineOwner;
 	private int repeats = 0;
@@ -128,6 +131,7 @@ public final class AsyncSimpleLog extends Thread {
 		super("AsyncSimpleLog thread");
 		setDaemon(true);
 		out = new PrintStream(System.out, false);
+		forks = new ArrayList<>(forkSetup);
 		shutdownHook = new Thread(() -> {
 			stopLogging();
 			while (isAlive()) {
@@ -138,10 +142,18 @@ public final class AsyncSimpleLog extends Thread {
 			List<LogRecord> li = new ArrayList<>();
 			queue.drainTo(li);
 			for (LogRecord lr : li) {
-				printRecord(lr);
+				if (printRecord(out, lr, false)) {
+					for (PrintStream fork : forks) {
+						printRecord(fork, lr, true);
+					}
+				}
 			}
 			out.println();
 			out.flush();
+			for (PrintStream fork : forks) {
+				fork.println();
+				fork.flush();
+			}
 		}, "AsyncSimpleLog shutdown thread");
 	}
 
@@ -153,7 +165,11 @@ public final class AsyncSimpleLog extends Thread {
 				LogRecord lr = null;
 				try {
 					lr = queue.take();
-					printRecord(lr);
+					if (printRecord(out, lr, false)) {
+						for (PrintStream fork : forks) {
+							printRecord(fork, lr, true);
+						}
+					}
 					Thread.yield();
 				} catch (InterruptedException e) {}
 			}
@@ -165,22 +181,22 @@ public final class AsyncSimpleLog extends Thread {
 		}
 	}
 
-	private void printRecord(LogRecord lr) {
+	private boolean printRecord(PrintStream out, LogRecord lr, boolean fork) {
 		String str = Objects.toString(lr.content);
 		for (Pattern p : silenced) {
 			if (p.matcher(str).find()) {
-				return;
+				return false;
 			}
 		}
 		String name = lr.owner.getName();
 		for (Pattern p : banned) {
 			if (p.matcher(name).find()) {
-				return;
+				return false;
 			}
 		}
 		String shortName = lr.owner.getShortName();
-		longestShortName = Math.max(longestShortName, shortName.length());
-		if (collapseRepeats && lastLine != null && lastLineOwner.equals(lr.owner.getName()) && lastLine.equals(str) && lr.exception == null) {
+		if (!fork) longestShortName = Math.max(longestShortName, shortName.length());
+		if (!fork && collapseRepeats && lastLine != null && lastLineOwner.equals(lr.owner.getName()) && lastLine.equals(str) && lr.exception == null) {
 			repeats++;
 			if (ansi) {
 				if (repeats == 1) {
@@ -232,24 +248,26 @@ public final class AsyncSimpleLog extends Thread {
 			}
 			out.flush();
 		} else {
-			if (repeats > 0) {
+			if (!fork && repeats > 0) {
 				if (ansi) {
 					out.print(ansiReset());
 				} else {
 					out.println(")");
 				}
 			}
-			flop = !flop;
-			repeats = 0;
-			lastLine = str;
-			lastLineOwner = lr.owner.getName();
-			if (ansi && collapseRepeats) {
+			if (!fork) {
+				flop = !flop;
+				repeats = 0;
+				lastLine = str;
+				lastLineOwner = lr.owner.getName();
+			}
+			if (!fork && ansi && collapseRepeats) {
 				out.println();
 			}
 			if (lr.exception != null) lr.exception.printStackTrace(out);
 			String dateStr = formatDate(lr.date);
 			int indentAmt = 0;
-			if (ansi) {
+			if (!fork && ansi) {
 				out.print(ansiReset());
 				if (powerline) {
 					out.print(ansiBg(16));
@@ -354,14 +372,15 @@ public final class AsyncSimpleLog extends Thread {
 			} else {
 				out.print(str);
 			}
-			if (ansi) {
+			if (!fork && ansi) {
 				out.print(ansiReset());
 			}
-			if (!ansi || !collapseRepeats) {
+			if (fork || !ansi || !collapseRepeats) {
 				out.println();
 			}
 			out.flush();
 		}
+		return true;
 	}
 
 	private static int murmur32(String s) {
@@ -460,6 +479,17 @@ public final class AsyncSimpleLog extends Thread {
 			inst.interrupt();
 			inst = null;
 		}
+	}
+	
+	/**
+	 * Add the given output stream as an alternate output ("fork"). Forks never have ANSI or
+	 * Powerline enabled, regardless of what they have been set to by {@link #setAnsi} and
+	 * {@link #setPowerline}.
+	 * <p>
+	 * All forks must be set up before the logging thread is started.
+	 */
+	public static void addFork(OutputStream out) {
+		forkSetup.add(new PrintStream(out, false));
 	}
 
 	/**
